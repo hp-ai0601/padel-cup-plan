@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Padel Cup — architecture, matching, flows</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#f3f6f8; --surface:#fff; --ink:#132433; --muted:#5b6b78; --line:#d9e2e8;
+  --court:#1f5f9e; --court-soft:#e3edf7; --out:#a03b32; --warn:#9a5b12; --warn-soft:#f6ecdf;
+  --w1:#2f7d62; --w1s:#e2f1ea; --w2:#1f5f9e; --w2s:#e3edf7; --pro:#9a5b12; --pros:#f6ecdf; --fin:#5c6b10; --fins:#eef2c4;
+  --ok:#2f7d62; --ok-soft:#e2f1ea; --miss:#a03b32; --miss-soft:#f8e8e6;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Figtree",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:64px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--body)}
+a{color:var(--court)}
+.nav{position:sticky;top:0;z-index:20;background:var(--ink);color:#fff}
+.nav .inner{max-width:1080px;margin:0 auto;padding:10px 16px;display:flex;gap:8px;overflow-x:auto;align-items:center}
+.nav a{color:#cfe0f0;text-decoration:none;font:600 12px/1 var(--display);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;padding:6px 8px}
+.nav a:hover{color:#fff}
+.nav .brand{color:#fff;margin-right:auto;font-size:16px;letter-spacing:.04em}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 16px 72px;display:flex;flex-direction:column;gap:36px}
+h1{font:700 clamp(32px,5vw,48px)/.95 var(--display);margin:0}
+h2{font:700 26px/1.1 var(--display);margin:0 0 10px;letter-spacing:.01em}
+h3{font:700 18px var(--display);margin:0 0 6px}
+.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--court);font-weight:600;margin:0 0 6px}
+.lede{color:var(--muted);margin:8px 0 0;max-width:70ch}
+.grid{display:grid;gap:12px}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:800px){.g3,.g2,.g4{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.card.live{border-top:4px solid var(--ok)}
+.card.miss{border-top:4px solid var(--miss)}
+.card.w1{border-top:4px solid var(--w1)}
+.card.w2{border-top:4px solid var(--w2)}
+.card.pro{border-top:4px solid var(--pro)}
+.card.fn{border-top:4px solid var(--fin)}
+.card.warn{background:var(--warn-soft);border-color:#e2c48a}
+.k{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.stat b{display:block;font:700 28px/1 var(--display)}
+.stat span{font-size:13px;color:var(--muted)}
+.arch{display:grid;grid-template-columns:1.1fr .9fr;gap:10px}
+@media (max-width:800px){.arch{grid-template-columns:1fr}}
+.layer{border:1px dashed var(--line);border-radius:10px;padding:12px;background:var(--surface)}
+.layer h3{margin-bottom:8px}
+.box{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--bg);margin:0 0 8px}
+.box b{display:block;font:700 16px var(--display)}
+.box small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+.arrow{text-align:center;color:var(--muted);font:700 18px var(--display);padding:2px 0}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.pill{display:inline-block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:999px}
+.ok{background:var(--ok-soft);color:var(--ok)}
+.no{background:var(--miss-soft);color:var(--miss)}
+.soon{background:var(--warn-soft);color:var(--warn)}
+.info{background:var(--court-soft);color:var(--court)}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+.step{flex:1;min-width:140px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.step .n{font:700 20px/1 var(--display);color:var(--court)}
+.mermaid{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;overflow-x:auto}
+.foot{font-size:13px;color:var(--muted)}
+code{font-family:ui-monospace,Consolas,monospace;font-size:.9em}
+.cmp td:nth-child(2){background:var(--ok-soft)}
+.cmp td:nth-child(3){background:var(--court-soft)}
+</style>
+</head>
+<body>
+<nav class="nav"><div class="inner">
+  <span class="brand">PADEL CUP</span>
+  <a href="#arch">Architecture</a>
+  <a href="#register">Register</a>
+  <a href="#asis">Matching now</a>
+  <a href="#wave">Wave format</a>
+  <a href="#book">Booking</a>
+  <a href="#cron">Cron</a>
+  <a href="#data">Data</a>
+  <a href="#board">Board</a>
+</div></nav>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Moneyball · 15 Oct 2026 · staging live</p>
+  <h1>Architecture, logics, and flows</h1>
+  <p class="lede">What is running on Vercel today versus Sam’s Wave Format (not coded yet). Stack stays Vercel + Supabase + Clerk + Shopify — not the GCP diagram from Requirements v1.7.</p>
+</header>
+
+<section class="grid g4">
+  <div class="card stat live"><span class="k">Staging</span><b>Live</b><span>moneyball-wheat.vercel.app</span></div>
+  <div class="card stat"><span class="k">Repo</span><b>e334af5</b><span>PR #30 on main</span></div>
+  <div class="card stat miss"><span class="k">Wave engine</span><b>Not built</b><span>Quartile R1 is what Draw runs</span></div>
+  <div class="card stat"><span class="k">Jira</span><b>PAD</b><span>agentic-cart-team.atlassian.net</span></div>
+</section>
+
+<section id="arch">
+  <h2>System architecture (keep this stack)</h2>
+  <p class="lede">PAD-21 / PAD-23 already chose Vercel + Supabase. Wave Format changes matching tables and the engine, not the host.</p>
+  <div class="arch">
+    <div class="layer">
+      <h3>Edge</h3>
+      <div class="box"><b>Shopify</b><small>Marketing, merch, Team Entry inventory 1,000, hosted checkout £150/team. No Padel auth.</small></div>
+      <div class="arrow">↓ Register / Login links</div>
+      <div class="box"><b>Vercel Next.js</b><small>moneyball-wheat.vercel.app — register, invite, account, admin Draw, webhooks.</small></div>
+    </div>
+    <div class="layer">
+      <h3>Identity · data · jobs</h3>
+      <div class="box"><b>Clerk</b><small>Email OTP + Google. Role source of truth is Supabase <code>app_users</code>.</small></div>
+      <div class="box"><b>Supabase Postgres</b><small>teams, players, clubs, rounds, matches.</small></div>
+      <div class="box"><b>Resend</b><small>Transactional email.</small></div>
+      <div class="box"><b>Vercel Cron</b><small>Live: hourly expire-unpaid. Missing: weekly clubs (PAD-126). Later: round trigger (PAD-57).</small></div>
+      <div class="box"><b>Playtomic (out of process)</b><small>No pull API. Deep-link search + paste join URL after matching.</small></div>
+    </div>
+  </div>
+  <div class="mermaid">
+flowchart TB
+  SHOP[Shopify storefront + checkout]
+  APP[Vercel Next.js]
+  CLERK[Clerk]
+  DB[(Supabase Postgres)]
+  CRON[Vercel Cron]
+  MAIL[Resend]
+  PT[Playtomic app]
+  SHOP -->|redirect| APP
+  APP --> CLERK
+  CLERK -->|role webhook| DB
+  APP --> DB
+  SHOP -->|orders/paid| APP
+  APP --> MAIL
+  CRON --> DB
+  APP -.->|search URL ?q=| PT
+  PT -.->|player pastes join URL| APP
+  </div>
+</section>
+
+<section id="register">
+  <h2>Register → paid → active</h2>
+  <p class="lede">This path is shipped. Wave assignment is not on it yet — every activated team is just “in the Draw pool”.</p>
+  <div class="flow">
+    <div class="step"><div class="n">1</div><b>Captain registers</b><small>Club, Playtomic URL + level, team name. Each player ≥ 3.0 (PAD-127).</small></div>
+    <div class="step"><div class="n">2</div><b>Team pending</b><small>Shopify cart Team Entry + team_id. Unpaid 48h → expired (hourly cron).</small></div>
+    <div class="step"><div class="n">3</div><b>Paid webhook</b><small>orders/paid → status activated. Only then Draw-eligible (PAD-50).</small></div>
+    <div class="step"><div class="n">4</div><b>Partner invite</b><small>Google/OTP on the partner email. Captain can PATCH Playtomic on /account (PAD-125 — already in code).</small></div>
+  </div>
+  <div class="mermaid">
+sequenceDiagram
+  actor C as Captain
+  participant App
+  participant Shop as Shopify
+  participant DB as Supabase
+  participant Cron as expire-unpaid
+  C->>App: register
+  App->>DB: team pending
+  App->>Shop: checkout
+  alt unpaid 48h
+    Cron->>DB: expired
+  else paid
+    Shop->>App: orders/paid
+    App->>DB: activated
+  end
+  </div>
+</section>
+
+<section id="asis">
+  <h2>Matching that is live (AS-IS)</h2>
+  <p class="lede">Admin Draw at /admin/draw. Pure engine in <code>lib/matching</code>: four rating quartiles, top vs bottom inside a bucket, geo fail-closed at 100 km. This is PAD-52 / PAD-123 — not Wave Format.</p>
+  <div class="grid g3">
+    <div class="card live"><span class="k">Layer 1 · pure</span><h3>geo / buckets / pair / preview</h3><p>No Supabase. Quartile sizes <code>floor((i+1)n/4)-floor(i n/4)</code>. Bucket 1 = strongest. No cross-bucket.</p></div>
+    <div class="card live"><span class="k">Layer 2 · IO</span><h3>pool + round1</h3><p>One fetch of activated teams. Preview replaces JSON + version++. Commit materializes matches from snapshot only.</p></div>
+    <div class="card miss"><span class="k">Missing</span><h3>books_closed</h3><p>Register/payment can still join between preview and commit. Fingerprint 409s — it does not stop the join. Commit body does not send expectedPreviewVersion from the UI.</p></div>
+  </div>
+  <h3>Pairing inside one quartile</h3>
+  <div class="mermaid">
+flowchart TD
+  S[Sorted bucket strong to weak]
+  ODD{odd count?}
+  BYE[Bye = seed 1]
+  SPLIT[topHalf vs bottomHalf]
+  PEEK[For each top: peek last bottom]
+  GEO{dist <= geoKm?}
+  LOCK[Lock pair]
+  SCAN[Nearest remaining bottom <= km]
+  UNR[geoUnresolved — top does not take a bottom]
+  S --> ODD
+  ODD -->|yes| BYE --> SPLIT
+  ODD -->|no| SPLIT
+  SPLIT --> PEEK --> GEO
+  GEO -->|yes| LOCK
+  GEO -->|no| SCAN
+  SCAN -->|found| LOCK
+  SCAN -->|none| UNR
+  UNR --> BLOCK[canCommit = false]
+  </div>
+  <div class="card warn">
+    <h3>80-team UK test @ 100 km</h3>
+    <p>4 geo-unresolved, typical gap ~500 km. Commit stayed blocked — that is the engine, not a UI bug. Raising km to ~500 pairs everyone but Round 1 becomes long-distance. Do not add auto-bye or cross-bucket to force a commit.</p>
+  </div>
+</section>
+
+<section id="wave">
+  <h2>Wave Format (TO-BE — Sam, not in code)</h2>
+  <p class="lede">Replaces 4 quartiles + merge-at-64/32 + pro-at-32-amateurs. Jira PAD-120 is In Progress but its text is still the old quartile algorithm. Do not code Wave into pair.js until that story is rewritten.</p>
+  <div class="grid g3">
+    <div class="card w1"><span class="k">Wave 1 · Intermediate</span><h3>Team average &lt; 5.0</h3><p>Core 3.0–4.9. HTML also lets teams below 3.0 in — that conflicts with the live ≥3.0 gate.</p></div>
+    <div class="card w2"><span class="k">Wave 2 · Advanced</span><h3>Average 5.0–7.0</h3><p>Forced here if any player &gt; 5.5, or both players are LTA top 1,000. No hiding a strong player with a 3.0 partner.</p></div>
+    <div class="card pro"><span class="k">Pro squad · Invited</span><h3>Hand-picked</h3><p>Seeded. No two pros meet in the Pro Round. Every pro must win once to reach the 32-team live Finals.</p></div>
+  </div>
+
+  <h3>One scoring number per player</h3>
+  <div class="grid g2">
+    <div class="card">
+      <table>
+        <thead><tr><th>LTA rank</th><th>Counts as</th></tr></thead>
+        <tbody>
+          <tr><td>1–25</td><td>6.50</td></tr>
+          <tr><td>26–100</td><td>6.25</td></tr>
+          <tr><td>101–250</td><td>6.00</td></tr>
+          <tr><td>251–500</td><td>5.75</td></tr>
+          <tr><td>501–1,000</td><td>5.50</td></tr>
+          <tr><td>1,001+ / unranked</td><td>Playtomic as entered</td></tr>
+        </tbody>
+      </table>
+      <p class="foot">If ranked top 1,000: scoring_level = max(band, Playtomic). Team level = average of two players.</p>
+    </div>
+    <div class="mermaid">
+flowchart TD
+  IN[playtomic + optional LTA rank]
+  R{LTA 1..1000?}
+  M["max(band, playtomic)"]
+  P[Playtomic only]
+  T[team = avg]
+  H{any player > 5.5?}
+  W2[Wave 2]
+  A{avg < 5.0?}
+  W1[Wave 1]
+  IN --> R
+  R -->|yes| M --> T
+  R -->|no| P --> T
+  T --> H
+  H -->|yes| W2
+  H -->|no| A
+  A -->|yes| W1
+  A -->|no| W2
+    </div>
+  </div>
+
+  <h3>Tournament shape</h3>
+  <div class="mermaid">
+flowchart TB
+  C[Books closed — levels lock]
+  W1[Wave 1 in each AREA — top pot vs bottom pot]
+  R1[Repechage 1 — first loss only — pair by level]
+  S[Wave 1 survivors]
+  W2[Wave 2 enters with survivors]
+  R2[Repechage 2 for first-time losers]
+  KO[Knockout sized once so each round halves to Q public]
+  PR[Pro Round of 64 = Q public + P pros]
+  F[Live London Finals 32]
+  C --> W1 --> R1 --> S --> W2 --> R2 --> KO --> PR --> F
+  </div>
+  <div class="grid g2">
+    <div class="card">
+      <h3>Rules that stay fair</h3>
+      <ul>
+        <li>One Repechage per team. Second loss is out. Every team gets at least two matches.</li>
+        <li>Round 1 pots are <b>per area</b>, not four UK-wide quartiles. Area is not in the schema yet — needs a client lock (club cluster / postcode / radius).</li>
+        <li>Wave 2 drawn against Wave 1 survivors; strongest Wave 2 kept apart.</li>
+        <li>Byes to highest-ranked. Knockout draw size set once after Wave 2.</li>
+        <li>Pro squad size P = 8 / 16 / 32 (HTML default 16). Q public qualifiers = 64 − P.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Why this is +1 week</h3>
+      <table class="cmp">
+        <thead><tr><th></th><th>Live now</th><th>Wave</th></tr></thead>
+        <tbody>
+          <tr><td>Split</td><td>4 rating quartiles</td><td>2 waves by level + LTA</td></tr>
+          <tr><td>Second chance</td><td>None</td><td>One Repechage</td></tr>
+          <tr><td>Later rounds</td><td>Games-lost re-seed, merge 64/32</td><td>Wave 2 join → KO → Pro → Finals</td></tr>
+          <tr><td>Pros</td><td>Inject at ≤32 amateurs</td><td>Own Pro Round of 64</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="book">
+  <h2>After a match is committed — booking</h2>
+  <p class="lede">PAD-66 (next week). Paper FR-VENUE was “clubs between homes, 24h propose”. The 14 Oct call replaced the book step: no Playtomic API in our app.</p>
+  <div class="flow">
+    <div class="step"><div class="n">1</div><b>Higher rating books first</b><small>App shows a Playtomic search link <code>?q=</code> home club / area.</small></div>
+    <div class="step"><div class="n">2</div><b>Book on Playtomic</b><small>Four people join one match URL (quarter of a court), each pays their slot.</small></div>
+    <div class="step"><div class="n">3</div><b>Paste join URL</b><small>Into Moneyball. Other team opens it and completes their booking.</small></div>
+    <div class="step"><div class="n">4</div><b>Wait recording</b><small>Sam sending a Playtomic booking video before the story AC is locked.</small></div>
+  </div>
+</section>
+
+<section id="cron">
+  <h2>Three jobs — do not mix them</h2>
+  <div class="grid g3">
+    <div class="card live"><span class="pill ok">Live</span><h3>Hourly expire-unpaid</h3><p><code>0 * * * *</code> → <code>/api/cron/expire-unpaid</code>. Pending &gt; 48h → expired. Paid rows never touched.</p></div>
+    <div class="card miss"><span class="pill no">PAD-126 · this week</span><h3>Weekly clubs upsert</h3><p>AC: find an API, upsert <code>clubs</code> once a week. Call said Playtomic will not grant pull access. No scrape. Report blocked if there is no legal source.</p></div>
+    <div class="card"><span class="pill soon">PAD-57 · later</span><h3>Round trigger</h3><p>When every match in a round is admin-approved, auto-generate the next preview. Admin still Commits. Not the weekly clubs job.</p></div>
+  </div>
+</section>
+
+<section id="data">
+  <h2>Data · live vs Wave columns</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>Already in Postgres</h3>
+      <p>clubs (lat/lng, active) · teams (status, combined_rating, rating_bucket_id 1–4, home_club_id) · players (Playtomic URL + level) · rounds (preview JSON, version, fingerprint) · matches (pair or bye).</p>
+    </div>
+    <div class="card warn">
+      <h3>Wave needs (not migrated)</h3>
+      <p>players.lta_rank, scoring_level · teams.wave, repechage_used · rounds.kind (w1/rep1/w2/rep2/ko/pro) · matches.playtomic_join_url · clubs.refreshed_at · tournament_settings.books_closed_at · <b>area</b> entity still undefined.</p>
+    </div>
+  </div>
+</section>
+
+<section id="board">
+  <h2>PAD board — this sprint</h2>
+  <p class="lede">Space Padel Cup on agentic-cart-team.atlassian.net. AC board is a different product.</p>
+  <table>
+    <thead><tr><th>Key</th><th>Story</th><th>Status</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td>PAD-120</td><td>Create algorithm Round 1</td><td><span class="pill soon">In Progress</span></td><td>Description still v1.7 quartiles</td></tr>
+      <tr><td>PAD-121</td><td>Playtomic Matching Round 1 (epic)</td><td><span class="pill info">To Do</span></td><td>Empty</td></tr>
+      <tr><td>PAD-124</td><td>Plan backend DB + Round 1 rules</td><td><span class="pill info">To Do</span></td><td>Must redo for Wave</td></tr>
+      <tr><td>PAD-39</td><td>Marketing-email consent</td><td><span class="pill info">To Do</span></td><td>Default ticked (call). v1.7 said unticked</td></tr>
+      <tr><td>PAD-126</td><td>Weekly cron upsert clubs</td><td><span class="pill info">To Do</span></td><td>This week. No code</td></tr>
+      <tr><td>PAD-125</td><td>Update Playtomic URL + score</td><td><span class="pill ok">Code on main</span></td><td>Test /account then close if sprint still shows To Do</td></tr>
+      <tr><td>PAD-66</td><td>Accept / concern + Playtomic link</td><td><span class="pill soon">Next week</span></td><td>Wait booking recording</td></tr>
+    </tbody>
+  </table>
+  <p class="foot">Matching tickets already Done (PAD-52, 54, 56, 58, 59, 123, 127, 128) implement the <b>quartile</b> engine. Wave supersedes that shape.</p>
+</section>
+
+<section>
+  <h2>Locks before Wave code</h2>
+  <div class="grid g2">
+    <div class="card warn"><b>Below 3.0</b><p>Live gate blocks them. HTML puts them in Wave 1.</p></div>
+    <div class="card warn"><b>What is an “area”?</b><p>Round 1 pots are per area. No table for that yet.</p></div>
+    <div class="card warn"><b>Max km</b><p>100 km failed a UK-wide 80-team draw.</p></div>
+    <div class="card warn"><b>PAD-126 API</b><p>Ticket wants a pull. Call said Playtomic will not give one.</p></div>
+  </div>
+</section>
+
+<p class="foot">Overview for architecture review. Staging Draw is functional quartile code, not a wireframe. Wave Format is the next engine. Sources: moneyball main e334af5, PAD Jira 1–128, Wave Format calculator, Requirements v1.7 (shape only — host is Vercel).</p>
+</div>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: "base",
+    themeVariables: {
+      primaryColor: "#e3edf7",
+      primaryTextColor: "#132433",
+      primaryBorderColor: "#1f5f9e",
+      lineColor: "#5b6b78",
+      secondaryColor: "#e2f1ea",
+      tertiaryColor: "#f3f6f8",
+      fontFamily: "Figtree, system-ui, sans-serif"
+    }
+  });
+</script>
+</body>
+</html>
